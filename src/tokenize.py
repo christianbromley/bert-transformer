@@ -40,6 +40,9 @@ def run(paths, output_dir):
     tokenizer.save_model(output_dir)
 
 def main():
+
+    input_dir, output_dir = parse_arguments()
+
     # create directory for the text files
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
