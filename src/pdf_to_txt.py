@@ -1,5 +1,8 @@
 import argparse
+#import en_core_web_sm
+import pandas as pd
 import PyPDF2
+import spacy
 
 
 # Create the parser
@@ -26,15 +29,22 @@ def parse_arguments():
 
 
 def extract_text_from_pdf(pdf_path, txt_path, start_page: int = None, end_page: int = None):
-    with open(pdf_path, 'rb') as pdf_file, open(txt_path, 'w', encoding='utf-8') as txt_file:
+    sentences = []
+    nlp = spacy.load('en_core_web_sm')
+    with open(pdf_path, 'rb') as pdf_file:
         reader = PyPDF2.PdfReader(pdf_file)
         if end_page is None:
             end_page = len(reader.pages)
         for page_num in range(start_page,end_page):
             page = reader.pages[page_num]
             text = page.extract_text()
-            txt_file.write(text)
-            txt_file.write('\n\n')
+            text = text.replace('\n', ' ')  # Replace newlines with spaces
+            doc = nlp(text)
+            for sent in doc.sents:
+                sentences.append(sent.text)
+
+    sent_df = pd.DataFrame({'sentence': sentences})
+    sent_df.to_csv(txt_path, index=False)
 
 
 def main():
