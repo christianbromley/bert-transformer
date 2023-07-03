@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 from transformers import RobertaTokenizer, RobertaConfig, RobertaForMaskedLM, AdamW
+from tokenizers import ByteLevelBPETokenizer
 import torch
 from tqdm.auto import tqdm
 
@@ -42,7 +43,7 @@ def masked_language_model(tensor):
         tensor[i,selection] = 4
     return tensor
 
-def build_tensors(paths):
+def build_tensors(paths, tokenizer):
     # our three tensors are:
     ## input ids - token IDs with a % of tokens masked with the mask token ID which in our case is 4
     input_ids = []
@@ -61,7 +62,7 @@ def build_tensors(paths):
         fname = path.split('/')[-1]
         # tokenize the text in these lines
         sample = tokenizer(lines, max_length=512, padding='max_length', truncation=True, return_tensors='pt')
-        print(sample.shape)
+        #print(sample.shape)
         # save to the output dictionary
         tokenized_text[fname] = sample
         # the sample object contains some of our tensors - extract these
@@ -72,7 +73,7 @@ def build_tensors(paths):
         ## now apply the masked language model function on the input IDs to mask 15% of tokens
         mlm_on_input = masked_language_model(sample.input_ids.detach().clone())
         input_ids.append(mlm_on_input)
-        print(path)
+        #print(path)
 
     # construct the output
     encodings = {
@@ -81,6 +82,7 @@ def build_tensors(paths):
         'labels': labels
     }
 
+    print(encodings['input_ids'])
     return tokenized_text, encodings
 
 
@@ -88,10 +90,10 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, encodings):
         self.encodings = encodings
     def __len__(self):
-        return self.encodings['input_ids'].shape[0]
+        return self.encodings['input_ids'][0].shape[0]
     def __getitem__(self, i):
         return {
-            'input_ids': self.encodings['input_ids'][i]
+            'input_ids': self.encodings['input_ids'][0][i]
         }
 
 
@@ -101,7 +103,7 @@ def create_data_loader(encodings):
     return data_loader
 
 
-def train_model(config):
+def train_model(config, loader):
     # init model
     model = RobertaForMaskedLM(config)
     # set device
@@ -123,9 +125,10 @@ def train_model(config):
             # initialize calculated gradients (from prev step)
             optim.zero_grad()
             # pull all tensor batches required for training
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            labels = batch['labels'].to(device)
+            print(batch.keys())
+            input_ids = batch['input_ids'][0].to(device)
+            attention_mask = batch['mask'][0].to(device)
+            labels = batch['labels'][0].to(device)
             # model
             outputs = model(input_ids,
                             attention_mask=attention_mask,
@@ -149,7 +152,9 @@ def main():
     tokenizer, paths = initialize_tokenizer(tokenizer_dir, text_dir)
 
     # tokenize text
-    tokenized_text, encodings = build_tensors(paths)
+    tokenized_text, encodings = build_tensors(paths, tokenizer)
+
+    print(encodings['input_ids'])
 
     # data loader creation
     loader = create_data_loader(encodings)
@@ -164,7 +169,7 @@ def main():
         type_vocab_size=1
     )
 
-    train_model(config)
+    train_model(config, loader)
 
     model.save_pretrained(f'{output_dir}/thesis_bert')
 
