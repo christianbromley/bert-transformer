@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 #import sys
 #sys.path.insert(0,'./.env/lib/python3.8/site-packages')
-#from tokenizers import ByteLevelBPETokenizer
+from tokenizers import ByteLevelBPETokenizer
 #from transformers import RobertaTokenizer
 import os
 
